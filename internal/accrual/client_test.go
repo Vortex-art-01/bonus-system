@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Vortex-art-01/bonus-system/internal/model"
 )
 
 func newServer(t *testing.T, handler http.HandlerFunc) *Client {
@@ -29,7 +31,7 @@ func TestClient_GetOrder_Processed(t *testing.T) {
 
 	info, err := c.GetOrder(context.Background(), "12345678903")
 	require.NoError(t, err)
-	assert.Equal(t, &OrderInfo{Order: "12345678903", Status: StatusProcessed, Accrual: 729.98}, info)
+	assert.Equal(t, &OrderInfo{Order: "12345678903", Status: StatusProcessed, Accrual: model.Money(72998)}, info)
 }
 
 func TestClient_GetOrder_WithoutAccrual(t *testing.T) {

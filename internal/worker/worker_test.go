@@ -26,14 +26,14 @@ type fakeStore struct {
 	updateErr  error
 	processErr error
 	updates    map[string]model.OrderStatus
-	processed  map[string]float64
+	processed  map[string]model.Money
 }
 
 func newFakeStore(pending ...model.Order) *fakeStore {
 	return &fakeStore{
 		pending:   pending,
 		updates:   map[string]model.OrderStatus{},
-		processed: map[string]float64{},
+		processed: map[string]model.Money{},
 	}
 }
 
@@ -54,7 +54,7 @@ func (s *fakeStore) UpdateOrderStatus(_ context.Context, number string, status m
 	return nil
 }
 
-func (s *fakeStore) ProcessOrder(_ context.Context, number string, accrual float64) error {
+func (s *fakeStore) ProcessOrder(_ context.Context, number string, accrual model.Money) error {
 	if s.processErr != nil {
 		return s.processErr
 	}
@@ -116,7 +116,7 @@ func TestProcessBatch_AppliesStatuses(t *testing.T) {
 			"processing":         {Order: "processing", Status: accrual.StatusProcessing},
 			"already-processing": {Order: "already-processing", Status: accrual.StatusProcessing},
 			"invalid":            {Order: "invalid", Status: accrual.StatusInvalid},
-			"processed":          {Order: "processed", Status: accrual.StatusProcessed, Accrual: 729.98},
+			"processed":          {Order: "processed", Status: accrual.StatusProcessed, Accrual: 72998},
 			"unknown-status":     {Order: "unknown-status", Status: "WEIRD"},
 		},
 		errs: map[string]error{"failing": errBoom},
@@ -131,7 +131,7 @@ func TestProcessBatch_AppliesStatuses(t *testing.T) {
 		"processing": model.OrderStatusProcessing,
 		"invalid":    model.OrderStatusInvalid,
 	}, store.updates)
-	assert.Equal(t, map[string]float64{"processed": 729.98}, store.processed)
+	assert.Equal(t, map[string]model.Money{"processed": 72998}, store.processed)
 	assert.Equal(t, int32(8), client.calls.Load())
 }
 
@@ -192,7 +192,7 @@ func TestProcessBatch_EmptyAndErrors(t *testing.T) {
 		store.processErr = errBoom
 		client := &fakeClient{responses: map[string]*accrual.OrderInfo{
 			"a": {Order: "a", Status: accrual.StatusInvalid},
-			"b": {Order: "b", Status: accrual.StatusProcessed, Accrual: 1},
+			"b": {Order: "b", Status: accrual.StatusProcessed, Accrual: 100},
 		}}
 		w := newWorker(store, client, Config{})
 
@@ -219,7 +219,7 @@ func TestProcessBatch_EmptyAndErrors(t *testing.T) {
 func TestRun_PollsUntilCanceled(t *testing.T) {
 	store := newFakeStore(order("1", model.OrderStatusNew))
 	client := &fakeClient{responses: map[string]*accrual.OrderInfo{
-		"1": {Order: "1", Status: accrual.StatusProcessed, Accrual: 5},
+		"1": {Order: "1", Status: accrual.StatusProcessed, Accrual: 500},
 	}}
 	w := newWorker(store, client, Config{PollInterval: 5 * time.Millisecond})
 
@@ -238,7 +238,7 @@ func TestRun_PollsUntilCanceled(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("worker did not stop after context cancellation")
 	}
-	assert.Equal(t, map[string]float64{"1": 5}, store.processed)
+	assert.Equal(t, map[string]model.Money{"1": 500}, store.processed)
 }
 
 func TestRun_BacksOffOnRateLimit(t *testing.T) {

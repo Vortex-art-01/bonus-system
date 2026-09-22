@@ -10,7 +10,7 @@ import (
 
 type BalanceRepository interface {
 	GetBalance(ctx context.Context, userID int64) (*model.Balance, error)
-	Withdraw(ctx context.Context, userID int64, order string, sum float64) error
+	Withdraw(ctx context.Context, userID int64, order string, sum model.Money) error
 	ListWithdrawals(ctx context.Context, userID int64) ([]model.Withdrawal, error)
 }
 
@@ -30,7 +30,7 @@ func (s *BalanceService) Get(ctx context.Context, userID int64) (*model.Balance,
 	return balance, nil
 }
 
-func (s *BalanceService) Withdraw(ctx context.Context, userID int64, order string, sum float64) error {
+func (s *BalanceService) Withdraw(ctx context.Context, userID int64, order string, sum model.Money) error {
 	if !luhn.Valid(order) {
 		return model.ErrInvalidOrderNumber
 	}

@@ -145,13 +145,13 @@ func TestListOrders(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectQuery(queryListOrdersByUser).WithArgs(int64(1)).
 			WillReturnRows(mock.NewRows(orderColumns()).
-				AddRow("2", int64(1), "PROCESSED", ptr(500.5), now).
-				AddRow("1", int64(1), "NEW", (*float64)(nil), now.Add(-time.Hour)))
+				AddRow("2", int64(1), "PROCESSED", ptr(model.Money(50050)), now).
+				AddRow("1", int64(1), "NEW", (*model.Money)(nil), now.Add(-time.Hour)))
 
 		orders, err := s.ListOrders(context.Background(), 1)
 		require.NoError(t, err)
 		assert.Equal(t, []model.Order{
-			{Number: "2", UserID: 1, Status: model.OrderStatusProcessed, Accrual: ptr(500.5), UploadedAt: now},
+			{Number: "2", UserID: 1, Status: model.OrderStatusProcessed, Accrual: ptr(model.Money(50050)), UploadedAt: now},
 			{Number: "1", UserID: 1, Status: model.OrderStatusNew, UploadedAt: now.Add(-time.Hour)},
 		}, orders)
 	})
@@ -176,7 +176,7 @@ func TestListOrders(t *testing.T) {
 	t.Run("scan error", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectQuery(queryListOrdersByUser).WithArgs(int64(1)).
-			WillReturnRows(mock.NewRows(orderColumns()).AddRow("1", int64(1), "NEW", (*float64)(nil), now).RowError(0, errBoom))
+			WillReturnRows(mock.NewRows(orderColumns()).AddRow("1", int64(1), "NEW", (*model.Money)(nil), now).RowError(0, errBoom))
 
 		_, err := s.ListOrders(context.Background(), 1)
 		assert.ErrorIs(t, err, errBoom)
@@ -189,7 +189,7 @@ func TestListOrdersForProcessing(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectQuery(queryListPendingOrders).WithArgs(10).
-			WillReturnRows(mock.NewRows(orderColumns()).AddRow("1", int64(1), "PROCESSING", (*float64)(nil), now))
+			WillReturnRows(mock.NewRows(orderColumns()).AddRow("1", int64(1), "PROCESSING", (*model.Money)(nil), now))
 
 		orders, err := s.ListOrdersForProcessing(context.Background(), 10)
 		require.NoError(t, err)
@@ -207,7 +207,7 @@ func TestListOrdersForProcessing(t *testing.T) {
 	t.Run("scan error", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectQuery(queryListPendingOrders).WithArgs(10).
-			WillReturnRows(mock.NewRows(orderColumns()).AddRow("1", int64(1), "NEW", (*float64)(nil), now).RowError(0, errBoom))
+			WillReturnRows(mock.NewRows(orderColumns()).AddRow("1", int64(1), "NEW", (*model.Money)(nil), now).RowError(0, errBoom))
 
 		_, err := s.ListOrdersForProcessing(context.Background(), 10)
 		assert.ErrorIs(t, err, errBoom)
@@ -234,60 +234,60 @@ func TestProcessOrder(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectBegin()
-		mock.ExpectQuery(queryMarkOrderProcessed).WithArgs("1", 500.5).
+		mock.ExpectQuery(queryMarkOrderProcessed).WithArgs("1", model.Money(50050)).
 			WillReturnRows(mock.NewRows([]string{"user_id"}).AddRow(int64(3)))
-		mock.ExpectExec(queryCreditBalance).WithArgs(int64(3), 500.5).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+		mock.ExpectExec(queryCreditBalance).WithArgs(int64(3), model.Money(50050)).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()
 
-		assert.NoError(t, s.ProcessOrder(context.Background(), "1", 500.5))
+		assert.NoError(t, s.ProcessOrder(context.Background(), "1", 50050))
 	})
 
 	t.Run("already final", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectBegin()
-		mock.ExpectQuery(queryMarkOrderProcessed).WithArgs("1", 500.5).WillReturnError(pgx.ErrNoRows)
+		mock.ExpectQuery(queryMarkOrderProcessed).WithArgs("1", model.Money(50050)).WillReturnError(pgx.ErrNoRows)
 		mock.ExpectCommit()
 
-		assert.NoError(t, s.ProcessOrder(context.Background(), "1", 500.5))
+		assert.NoError(t, s.ProcessOrder(context.Background(), "1", 50050))
 	})
 
 	t.Run("begin error", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectBegin().WillReturnError(errBoom)
 
-		assert.ErrorIs(t, s.ProcessOrder(context.Background(), "1", 500.5), errBoom)
+		assert.ErrorIs(t, s.ProcessOrder(context.Background(), "1", 50050), errBoom)
 	})
 
 	t.Run("mark error rolls back", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectBegin()
-		mock.ExpectQuery(queryMarkOrderProcessed).WithArgs("1", 500.5).WillReturnError(errBoom)
+		mock.ExpectQuery(queryMarkOrderProcessed).WithArgs("1", model.Money(50050)).WillReturnError(errBoom)
 		mock.ExpectRollback()
 
-		assert.ErrorIs(t, s.ProcessOrder(context.Background(), "1", 500.5), errBoom)
+		assert.ErrorIs(t, s.ProcessOrder(context.Background(), "1", 50050), errBoom)
 	})
 
 	t.Run("credit error rolls back", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectBegin()
-		mock.ExpectQuery(queryMarkOrderProcessed).WithArgs("1", 500.5).
+		mock.ExpectQuery(queryMarkOrderProcessed).WithArgs("1", model.Money(50050)).
 			WillReturnRows(mock.NewRows([]string{"user_id"}).AddRow(int64(3)))
-		mock.ExpectExec(queryCreditBalance).WithArgs(int64(3), 500.5).WillReturnError(errBoom)
+		mock.ExpectExec(queryCreditBalance).WithArgs(int64(3), model.Money(50050)).WillReturnError(errBoom)
 		mock.ExpectRollback()
 
-		assert.ErrorIs(t, s.ProcessOrder(context.Background(), "1", 500.5), errBoom)
+		assert.ErrorIs(t, s.ProcessOrder(context.Background(), "1", 50050), errBoom)
 	})
 
 	t.Run("commit error", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectBegin()
-		mock.ExpectQuery(queryMarkOrderProcessed).WithArgs("1", 500.5).
+		mock.ExpectQuery(queryMarkOrderProcessed).WithArgs("1", model.Money(50050)).
 			WillReturnRows(mock.NewRows([]string{"user_id"}).AddRow(int64(3)))
-		mock.ExpectExec(queryCreditBalance).WithArgs(int64(3), 500.5).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+		mock.ExpectExec(queryCreditBalance).WithArgs(int64(3), model.Money(50050)).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit().WillReturnError(errBoom)
 		mock.ExpectRollback()
 
-		assert.ErrorIs(t, s.ProcessOrder(context.Background(), "1", 500.5), errBoom)
+		assert.ErrorIs(t, s.ProcessOrder(context.Background(), "1", 50050), errBoom)
 	})
 }
 
@@ -295,11 +295,11 @@ func TestGetBalance(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectQuery(queryGetBalance).WithArgs(int64(1)).
-			WillReturnRows(mock.NewRows([]string{"balance", "withdrawn"}).AddRow(500.5, 42.0))
+			WillReturnRows(mock.NewRows([]string{"balance", "withdrawn"}).AddRow(int64(50050), int64(4200)))
 
 		balance, err := s.GetBalance(context.Background(), 1)
 		require.NoError(t, err)
-		assert.Equal(t, &model.Balance{Current: 500.5, Withdrawn: 42}, balance)
+		assert.Equal(t, &model.Balance{Current: 50050, Withdrawn: 4200}, balance)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -323,39 +323,39 @@ func TestWithdraw(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectBegin()
-		mock.ExpectExec(queryDebitBalance).WithArgs(int64(1), 100.0).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
-		mock.ExpectExec(queryInsertWithdrawal).WithArgs(int64(1), "2377225624", 100.0).WillReturnResult(pgxmock.NewResult("INSERT", 1))
+		mock.ExpectExec(queryDebitBalance).WithArgs(int64(1), model.Money(10000)).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+		mock.ExpectExec(queryInsertWithdrawal).WithArgs(int64(1), "2377225624", model.Money(10000)).WillReturnResult(pgxmock.NewResult("INSERT", 1))
 		mock.ExpectCommit()
 
-		assert.NoError(t, s.Withdraw(context.Background(), 1, "2377225624", 100))
+		assert.NoError(t, s.Withdraw(context.Background(), 1, "2377225624", 10000))
 	})
 
 	t.Run("insufficient funds", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectBegin()
-		mock.ExpectExec(queryDebitBalance).WithArgs(int64(1), 100.0).WillReturnResult(pgxmock.NewResult("UPDATE", 0))
+		mock.ExpectExec(queryDebitBalance).WithArgs(int64(1), model.Money(10000)).WillReturnResult(pgxmock.NewResult("UPDATE", 0))
 		mock.ExpectRollback()
 
-		assert.ErrorIs(t, s.Withdraw(context.Background(), 1, "2377225624", 100), model.ErrInsufficientFunds)
+		assert.ErrorIs(t, s.Withdraw(context.Background(), 1, "2377225624", 10000), model.ErrInsufficientFunds)
 	})
 
 	t.Run("debit error", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectBegin()
-		mock.ExpectExec(queryDebitBalance).WithArgs(int64(1), 100.0).WillReturnError(errBoom)
+		mock.ExpectExec(queryDebitBalance).WithArgs(int64(1), model.Money(10000)).WillReturnError(errBoom)
 		mock.ExpectRollback()
 
-		assert.ErrorIs(t, s.Withdraw(context.Background(), 1, "2377225624", 100), errBoom)
+		assert.ErrorIs(t, s.Withdraw(context.Background(), 1, "2377225624", 10000), errBoom)
 	})
 
 	t.Run("insert error", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectBegin()
-		mock.ExpectExec(queryDebitBalance).WithArgs(int64(1), 100.0).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
-		mock.ExpectExec(queryInsertWithdrawal).WithArgs(int64(1), "2377225624", 100.0).WillReturnError(errBoom)
+		mock.ExpectExec(queryDebitBalance).WithArgs(int64(1), model.Money(10000)).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+		mock.ExpectExec(queryInsertWithdrawal).WithArgs(int64(1), "2377225624", model.Money(10000)).WillReturnError(errBoom)
 		mock.ExpectRollback()
 
-		assert.ErrorIs(t, s.Withdraw(context.Background(), 1, "2377225624", 100), errBoom)
+		assert.ErrorIs(t, s.Withdraw(context.Background(), 1, "2377225624", 10000), errBoom)
 	})
 }
 
@@ -366,11 +366,11 @@ func TestListWithdrawals(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectQuery(queryListWithdrawals).WithArgs(int64(1)).
-			WillReturnRows(mock.NewRows(columns).AddRow(int64(5), int64(1), "2377225624", 500.0, now))
+			WillReturnRows(mock.NewRows(columns).AddRow(int64(5), int64(1), "2377225624", int64(50000), now))
 
 		withdrawals, err := s.ListWithdrawals(context.Background(), 1)
 		require.NoError(t, err)
-		assert.Equal(t, []model.Withdrawal{{ID: 5, UserID: 1, Order: "2377225624", Sum: 500, ProcessedAt: now}}, withdrawals)
+		assert.Equal(t, []model.Withdrawal{{ID: 5, UserID: 1, Order: "2377225624", Sum: 50000, ProcessedAt: now}}, withdrawals)
 	})
 
 	t.Run("query error", func(t *testing.T) {
@@ -384,7 +384,7 @@ func TestListWithdrawals(t *testing.T) {
 	t.Run("scan error", func(t *testing.T) {
 		s, mock := newMock(t)
 		mock.ExpectQuery(queryListWithdrawals).WithArgs(int64(1)).
-			WillReturnRows(mock.NewRows(columns).AddRow(int64(5), int64(1), "2377225624", 500.0, now).RowError(0, errBoom))
+			WillReturnRows(mock.NewRows(columns).AddRow(int64(5), int64(1), "2377225624", int64(50000), now).RowError(0, errBoom))
 
 		_, err := s.ListWithdrawals(context.Background(), 1)
 		assert.ErrorIs(t, err, errBoom)

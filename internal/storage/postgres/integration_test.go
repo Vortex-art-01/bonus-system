@@ -99,22 +99,22 @@ func TestIntegration_Orders(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, model.OrderStatusProcessing, orders[1].Status)
 
-	require.NoError(t, s.ProcessOrder(ctx, "12345678903", 729.98))
+	require.NoError(t, s.ProcessOrder(ctx, "12345678903", 72998))
 	orders, err = s.ListOrders(ctx, alice.ID)
 	require.NoError(t, err)
 	assert.Equal(t, model.OrderStatusProcessed, orders[1].Status)
 	require.NotNil(t, orders[1].Accrual)
-	assert.InDelta(t, 729.98, *orders[1].Accrual, 1e-9)
+	assert.Equal(t, model.Money(72998), *orders[1].Accrual)
 
 	balance, err := s.GetBalance(ctx, alice.ID)
 	require.NoError(t, err)
-	assert.InDelta(t, 729.98, balance.Current, 1e-9)
+	assert.Equal(t, model.Money(72998), balance.Current)
 
-	require.NoError(t, s.ProcessOrder(ctx, "12345678903", 1000))
+	require.NoError(t, s.ProcessOrder(ctx, "12345678903", 100000))
 	require.NoError(t, s.UpdateOrderStatus(ctx, "12345678903", model.OrderStatusInvalid))
 	balance, err = s.GetBalance(ctx, alice.ID)
 	require.NoError(t, err)
-	assert.InDelta(t, 729.98, balance.Current, 1e-9)
+	assert.Equal(t, model.Money(72998), balance.Current)
 	orders, err = s.ListOrders(ctx, alice.ID)
 	require.NoError(t, err)
 	assert.Equal(t, model.OrderStatusProcessed, orders[1].Status)
@@ -125,7 +125,7 @@ func TestIntegration_Orders(t *testing.T) {
 	assert.Empty(t, pending)
 
 	require.NoError(t, s.UpdateOrderStatus(ctx, "0", model.OrderStatusInvalid))
-	require.NoError(t, s.ProcessOrder(ctx, "0", 1))
+	require.NoError(t, s.ProcessOrder(ctx, "0", 100))
 }
 
 func TestIntegration_Withdrawals(t *testing.T) {
@@ -135,29 +135,29 @@ func TestIntegration_Withdrawals(t *testing.T) {
 	alice, err := s.CreateUser(ctx, "alice", "hash")
 	require.NoError(t, err)
 
-	assert.ErrorIs(t, s.Withdraw(ctx, alice.ID, "2377225624", 10), model.ErrInsufficientFunds)
-	assert.ErrorIs(t, s.Withdraw(ctx, alice.ID+1000, "2377225624", 10), model.ErrInsufficientFunds)
+	assert.ErrorIs(t, s.Withdraw(ctx, alice.ID, "2377225624", 1000), model.ErrInsufficientFunds)
+	assert.ErrorIs(t, s.Withdraw(ctx, alice.ID+1000, "2377225624", 1000), model.ErrInsufficientFunds)
 
 	require.NoError(t, s.CreateOrder(ctx, "12345678903", alice.ID))
-	require.NoError(t, s.ProcessOrder(ctx, "12345678903", 500.5))
+	require.NoError(t, s.ProcessOrder(ctx, "12345678903", 50050))
 
-	require.NoError(t, s.Withdraw(ctx, alice.ID, "2377225624", 100.25))
+	require.NoError(t, s.Withdraw(ctx, alice.ID, "2377225624", 10025))
 	pause()
-	require.NoError(t, s.Withdraw(ctx, alice.ID, "79927398713", 400.25))
-	assert.ErrorIs(t, s.Withdraw(ctx, alice.ID, "346436439", 0.01), model.ErrInsufficientFunds)
+	require.NoError(t, s.Withdraw(ctx, alice.ID, "79927398713", 40025))
+	assert.ErrorIs(t, s.Withdraw(ctx, alice.ID, "346436439", 1), model.ErrInsufficientFunds)
 
 	balance, err := s.GetBalance(ctx, alice.ID)
 	require.NoError(t, err)
-	assert.InDelta(t, 0, balance.Current, 1e-9)
-	assert.InDelta(t, 500.5, balance.Withdrawn, 1e-9)
+	assert.Equal(t, model.Money(0), balance.Current)
+	assert.Equal(t, model.Money(50050), balance.Withdrawn)
 
 	withdrawals, err := s.ListWithdrawals(ctx, alice.ID)
 	require.NoError(t, err)
 	require.Len(t, withdrawals, 2)
 	assert.Equal(t, "79927398713", withdrawals[0].Order, "newest first")
-	assert.InDelta(t, 400.25, withdrawals[0].Sum, 1e-9)
+	assert.Equal(t, model.Money(40025), withdrawals[0].Sum)
 	assert.Equal(t, "2377225624", withdrawals[1].Order)
-	assert.InDelta(t, 100.25, withdrawals[1].Sum, 1e-9)
+	assert.Equal(t, model.Money(10025), withdrawals[1].Sum)
 	for _, w := range withdrawals {
 		assert.Positive(t, w.ID)
 		assert.Equal(t, alice.ID, w.UserID)

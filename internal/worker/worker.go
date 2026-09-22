@@ -14,7 +14,7 @@ import (
 type OrderStore interface {
 	ListOrdersForProcessing(ctx context.Context, limit int) ([]model.Order, error)
 	UpdateOrderStatus(ctx context.Context, number string, status model.OrderStatus) error
-	ProcessOrder(ctx context.Context, number string, accrual float64) error
+	ProcessOrder(ctx context.Context, number string, accrual model.Money) error
 }
 
 type AccrualClient interface {
@@ -160,6 +160,6 @@ func (w *Worker) processOrder(ctx context.Context, order model.Order) time.Durat
 		return 0
 	}
 
-	log.Info("order updated", slog.String("status", string(info.Status)), slog.Float64("accrual", info.Accrual))
+	log.Info("order updated", slog.String("status", string(info.Status)), slog.String("accrual", info.Accrual.String()))
 	return 0
 }

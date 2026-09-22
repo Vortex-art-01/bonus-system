@@ -13,10 +13,10 @@ import (
 const maxOrderNumberSize = 1 << 10
 
 type orderResponse struct {
-	Number     string   `json:"number"`
-	Status     string   `json:"status"`
-	Accrual    *float64 `json:"accrual,omitempty"`
-	UploadedAt string   `json:"uploaded_at"`
+	Number     string       `json:"number"`
+	Status     string       `json:"status"`
+	Accrual    *model.Money `json:"accrual,omitempty"`
+	UploadedAt string       `json:"uploaded_at"`
 }
 
 func (h *Handler) uploadOrder(w http.ResponseWriter, r *http.Request) {

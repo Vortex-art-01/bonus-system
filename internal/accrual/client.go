@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/Vortex-art-01/bonus-system/internal/model"
 )
 
 type Status string
@@ -28,9 +30,9 @@ const (
 )
 
 type OrderInfo struct {
-	Order   string  `json:"order"`
-	Status  Status  `json:"status"`
-	Accrual float64 `json:"accrual"`
+	Order   string      `json:"order"`
+	Status  Status      `json:"status"`
+	Accrual model.Money `json:"accrual"`
 }
 
 var ErrOrderNotRegistered = errors.New("order is not registered in the accrual system")

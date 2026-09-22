@@ -19,6 +19,7 @@ import (
 
 	"github.com/Vortex-art-01/bonus-system/internal/app"
 	"github.com/Vortex-art-01/bonus-system/internal/config"
+	"github.com/Vortex-art-01/bonus-system/internal/model"
 	"github.com/Vortex-art-01/bonus-system/internal/testutil"
 )
 
@@ -114,21 +115,21 @@ func waitReady(t *testing.T, base string) {
 }
 
 type orderView struct {
-	Number     string   `json:"number"`
-	Status     string   `json:"status"`
-	Accrual    *float64 `json:"accrual"`
-	UploadedAt string   `json:"uploaded_at"`
+	Number     string       `json:"number"`
+	Status     string       `json:"status"`
+	Accrual    *model.Money `json:"accrual"`
+	UploadedAt string       `json:"uploaded_at"`
 }
 
 type balanceView struct {
-	Current   float64 `json:"current"`
-	Withdrawn float64 `json:"withdrawn"`
+	Current   model.Money `json:"current"`
+	Withdrawn model.Money `json:"withdrawn"`
 }
 
 type withdrawalView struct {
-	Order       string  `json:"order"`
-	Sum         float64 `json:"sum"`
-	ProcessedAt string  `json:"processed_at"`
+	Order       string      `json:"order"`
+	Sum         model.Money `json:"sum"`
+	ProcessedAt string      `json:"processed_at"`
 }
 
 func TestIntegration_EndToEnd(t *testing.T) {
@@ -231,14 +232,14 @@ func TestIntegration_EndToEnd(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(resp.body), &orders))
 	assert.Nil(t, orders[0].Accrual)
 	require.NotNil(t, orders[1].Accrual)
-	assert.InDelta(t, 729.98, *orders[1].Accrual, 1e-9)
+	assert.Equal(t, model.Money(72998), *orders[1].Accrual)
 
 	resp = alice.do(http.MethodGet, "/api/user/balance", "", nil)
 	require.Equal(t, http.StatusOK, resp.code, resp.body)
 	var balance balanceView
 	require.NoError(t, json.Unmarshal([]byte(resp.body), &balance))
-	assert.InDelta(t, 729.98, balance.Current, 1e-9)
-	assert.InDelta(t, 0, balance.Withdrawn, 1e-9)
+	assert.Equal(t, model.Money(72998), balance.Current)
+	assert.Equal(t, model.Money(0), balance.Withdrawn)
 
 	resp = alice.json(http.MethodPost, "/api/user/balance/withdraw", `{"order":"2377225624","sum":29.98}`)
 	assert.Equal(t, http.StatusOK, resp.code, resp.body)
@@ -249,8 +250,8 @@ func TestIntegration_EndToEnd(t *testing.T) {
 
 	resp = alice.do(http.MethodGet, "/api/user/balance", "", nil)
 	require.NoError(t, json.Unmarshal([]byte(resp.body), &balance))
-	assert.InDelta(t, 700, balance.Current, 1e-9)
-	assert.InDelta(t, 29.98, balance.Withdrawn, 1e-9)
+	assert.Equal(t, model.Money(70000), balance.Current)
+	assert.Equal(t, model.Money(2998), balance.Withdrawn)
 
 	resp = alice.do(http.MethodGet, "/api/user/withdrawals", "", nil)
 	require.Equal(t, http.StatusOK, resp.code, resp.body)
@@ -258,7 +259,7 @@ func TestIntegration_EndToEnd(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(resp.body), &withdrawals))
 	require.Len(t, withdrawals, 1)
 	assert.Equal(t, "2377225624", withdrawals[0].Order)
-	assert.InDelta(t, 29.98, withdrawals[0].Sum, 1e-9)
+	assert.Equal(t, model.Money(2998), withdrawals[0].Sum)
 	_, err = time.Parse(time.RFC3339, withdrawals[0].ProcessedAt)
 	assert.NoError(t, err)
 

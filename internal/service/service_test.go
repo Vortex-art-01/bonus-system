@@ -22,7 +22,7 @@ type fakeRepo struct {
 	createOrder     func(ctx context.Context, number string, userID int64) error
 	listOrders      func(ctx context.Context, userID int64) ([]model.Order, error)
 	getBalance      func(ctx context.Context, userID int64) (*model.Balance, error)
-	withdraw        func(ctx context.Context, userID int64, order string, sum float64) error
+	withdraw        func(ctx context.Context, userID int64, order string, sum model.Money) error
 	listWithdrawals func(ctx context.Context, userID int64) ([]model.Withdrawal, error)
 }
 
@@ -46,7 +46,7 @@ func (f *fakeRepo) GetBalance(ctx context.Context, userID int64) (*model.Balance
 	return f.getBalance(ctx, userID)
 }
 
-func (f *fakeRepo) Withdraw(ctx context.Context, userID int64, order string, sum float64) error {
+func (f *fakeRepo) Withdraw(ctx context.Context, userID int64, order string, sum model.Money) error {
 	return f.withdraw(ctx, userID, order, sum)
 }
 
@@ -229,12 +229,12 @@ func TestBalanceService_Get(t *testing.T) {
 
 	t.Run("ok", func(t *testing.T) {
 		repo := &fakeRepo{getBalance: func(context.Context, int64) (*model.Balance, error) {
-			return &model.Balance{Current: 500.5, Withdrawn: 42}, nil
+			return &model.Balance{Current: 50050, Withdrawn: 4200}, nil
 		}}
 
 		got, err := NewBalanceService(repo).Get(ctx, 1)
 		require.NoError(t, err)
-		assert.Equal(t, &model.Balance{Current: 500.5, Withdrawn: 42}, got)
+		assert.Equal(t, &model.Balance{Current: 50050, Withdrawn: 4200}, got)
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -250,35 +250,35 @@ func TestBalanceService_Withdraw(t *testing.T) {
 
 	t.Run("ok", func(t *testing.T) {
 		var called bool
-		repo := &fakeRepo{withdraw: func(_ context.Context, userID int64, order string, sum float64) error {
+		repo := &fakeRepo{withdraw: func(_ context.Context, userID int64, order string, sum model.Money) error {
 			called = true
 			assert.Equal(t, int64(1), userID)
 			assert.Equal(t, "2377225624", order)
-			assert.Equal(t, 751.0, sum)
+			assert.Equal(t, model.Money(75100), sum)
 			return nil
 		}}
 
-		require.NoError(t, NewBalanceService(repo).Withdraw(ctx, 1, "2377225624", 751))
+		require.NoError(t, NewBalanceService(repo).Withdraw(ctx, 1, "2377225624", 75100))
 		assert.True(t, called)
 	})
 
 	t.Run("validation", func(t *testing.T) {
-		repo := &fakeRepo{withdraw: func(context.Context, int64, string, float64) error {
+		repo := &fakeRepo{withdraw: func(context.Context, int64, string, model.Money) error {
 			t.Fatal("repository must not be called")
 			return nil
 		}}
 		svc := NewBalanceService(repo)
 
-		assert.ErrorIs(t, svc.Withdraw(ctx, 1, "2377225625", 10), model.ErrInvalidOrderNumber)
-		assert.ErrorIs(t, svc.Withdraw(ctx, 1, "", 10), model.ErrInvalidOrderNumber)
+		assert.ErrorIs(t, svc.Withdraw(ctx, 1, "2377225625", 1000), model.ErrInvalidOrderNumber)
+		assert.ErrorIs(t, svc.Withdraw(ctx, 1, "", 1000), model.ErrInvalidOrderNumber)
 		assert.ErrorIs(t, svc.Withdraw(ctx, 1, "2377225624", 0), model.ErrInvalidWithdrawalSum)
-		assert.ErrorIs(t, svc.Withdraw(ctx, 1, "2377225624", -5), model.ErrInvalidWithdrawalSum)
+		assert.ErrorIs(t, svc.Withdraw(ctx, 1, "2377225624", -500), model.ErrInvalidWithdrawalSum)
 	})
 
 	t.Run("insufficient funds", func(t *testing.T) {
-		repo := &fakeRepo{withdraw: func(context.Context, int64, string, float64) error { return model.ErrInsufficientFunds }}
+		repo := &fakeRepo{withdraw: func(context.Context, int64, string, model.Money) error { return model.ErrInsufficientFunds }}
 
-		err := NewBalanceService(repo).Withdraw(ctx, 1, "2377225624", 751)
+		err := NewBalanceService(repo).Withdraw(ctx, 1, "2377225624", 75100)
 		assert.ErrorIs(t, err, model.ErrInsufficientFunds)
 	})
 }
@@ -287,7 +287,7 @@ func TestBalanceService_ListWithdrawals(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("ok", func(t *testing.T) {
-		want := []model.Withdrawal{{ID: 1, UserID: 1, Order: "2377225624", Sum: 500}}
+		want := []model.Withdrawal{{ID: 1, UserID: 1, Order: "2377225624", Sum: 50000}}
 		repo := &fakeRepo{listWithdrawals: func(context.Context, int64) ([]model.Withdrawal, error) { return want, nil }}
 
 		got, err := NewBalanceService(repo).ListWithdrawals(ctx, 1)

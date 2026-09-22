@@ -42,7 +42,7 @@ type fakeServices struct {
 	upload          func(ctx context.Context, userID int64, number string) error
 	list            func(ctx context.Context, userID int64) ([]model.Order, error)
 	get             func(ctx context.Context, userID int64) (*model.Balance, error)
-	withdraw        func(ctx context.Context, userID int64, order string, sum float64) error
+	withdraw        func(ctx context.Context, userID int64, order string, sum model.Money) error
 	listWithdrawals func(ctx context.Context, userID int64) ([]model.Withdrawal, error)
 }
 
@@ -66,7 +66,7 @@ func (f *fakeServices) Get(ctx context.Context, userID int64) (*model.Balance, e
 	return f.get(ctx, userID)
 }
 
-func (f *fakeServices) Withdraw(ctx context.Context, userID int64, order string, sum float64) error {
+func (f *fakeServices) Withdraw(ctx context.Context, userID int64, order string, sum model.Money) error {
 	return f.withdraw(ctx, userID, order, sum)
 }
 
@@ -304,7 +304,7 @@ func TestUploadOrder(t *testing.T) {
 
 func TestListOrders(t *testing.T) {
 	uploaded := time.Date(2020, 12, 10, 15, 15, 45, 0, time.FixedZone("MSK", 3*3600))
-	accrual := 500.0
+	accrual := model.Money(50000)
 
 	t.Run("ok", func(t *testing.T) {
 		svc := &fakeServices{list: func(_ context.Context, userID int64) ([]model.Order, error) {
@@ -347,7 +347,7 @@ func TestGetBalance(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		svc := &fakeServices{get: func(_ context.Context, userID int64) (*model.Balance, error) {
 			assert.Equal(t, testUserID, userID)
-			return &model.Balance{Current: 500.5, Withdrawn: 42}, nil
+			return &model.Balance{Current: 50050, Withdrawn: 4200}, nil
 		}}
 
 		w := do(t, newRouter(svc), request{method: http.MethodGet, path: "/api/user/balance", auth: true})
@@ -369,42 +369,52 @@ func TestWithdraw(t *testing.T) {
 	tests := []struct {
 		name       string
 		body       string
-		withdraw   func(ctx context.Context, userID int64, order string, sum float64) error
+		withdraw   func(ctx context.Context, userID int64, order string, sum model.Money) error
 		wantStatus int
 	}{
 		{
 			name: "ok",
 			body: `{"order":"2377225624","sum":751}`,
-			withdraw: func(_ context.Context, userID int64, order string, sum float64) error {
+			withdraw: func(_ context.Context, userID int64, order string, sum model.Money) error {
 				assert.Equal(t, testUserID, userID)
 				assert.Equal(t, "2377225624", order)
-				assert.Equal(t, 751.0, sum)
+				assert.Equal(t, model.Money(75100), sum)
 				return nil
 			},
 			wantStatus: http.StatusOK,
 		},
 		{
+			name: "fractional sum",
+			body: `{"order":"2377225624","sum":29.98}`,
+			withdraw: func(_ context.Context, _ int64, _ string, sum model.Money) error {
+				assert.Equal(t, model.Money(2998), sum)
+				return nil
+			},
+			wantStatus: http.StatusOK,
+		},
+		{name: "sum as a string", body: `{"order":"2377225624","sum":"751"}`, wantStatus: http.StatusBadRequest},
+		{
 			name:       "insufficient funds",
 			body:       `{"order":"2377225624","sum":751}`,
-			withdraw:   func(context.Context, int64, string, float64) error { return model.ErrInsufficientFunds },
+			withdraw:   func(context.Context, int64, string, model.Money) error { return model.ErrInsufficientFunds },
 			wantStatus: http.StatusPaymentRequired,
 		},
 		{
 			name:       "invalid order",
 			body:       `{"order":"1","sum":751}`,
-			withdraw:   func(context.Context, int64, string, float64) error { return model.ErrInvalidOrderNumber },
+			withdraw:   func(context.Context, int64, string, model.Money) error { return model.ErrInvalidOrderNumber },
 			wantStatus: http.StatusUnprocessableEntity,
 		},
 		{
 			name:       "invalid sum",
 			body:       `{"order":"2377225624","sum":0}`,
-			withdraw:   func(context.Context, int64, string, float64) error { return model.ErrInvalidWithdrawalSum },
+			withdraw:   func(context.Context, int64, string, model.Money) error { return model.ErrInvalidWithdrawalSum },
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "internal error",
 			body:       `{"order":"2377225624","sum":751}`,
-			withdraw:   func(context.Context, int64, string, float64) error { return errBoom },
+			withdraw:   func(context.Context, int64, string, model.Money) error { return errBoom },
 			wantStatus: http.StatusInternalServerError,
 		},
 		{name: "malformed json", body: `{"order":`, wantStatus: http.StatusBadRequest},
@@ -414,7 +424,7 @@ func TestWithdraw(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := &fakeServices{withdraw: tt.withdraw}
 			if svc.withdraw == nil {
-				svc.withdraw = func(context.Context, int64, string, float64) error {
+				svc.withdraw = func(context.Context, int64, string, model.Money) error {
 					t.Fatal("service must not be called")
 					return nil
 				}
@@ -433,7 +443,7 @@ func TestListWithdrawals(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		svc := &fakeServices{listWithdrawals: func(_ context.Context, userID int64) ([]model.Withdrawal, error) {
 			assert.Equal(t, testUserID, userID)
-			return []model.Withdrawal{{ID: 1, UserID: userID, Order: "2377225624", Sum: 500, ProcessedAt: processed}}, nil
+			return []model.Withdrawal{{ID: 1, UserID: userID, Order: "2377225624", Sum: 50000, ProcessedAt: processed}}, nil
 		}}
 
 		w := do(t, newRouter(svc), request{method: http.MethodGet, path: "/api/user/withdrawals", auth: true})
@@ -461,7 +471,7 @@ func TestListWithdrawals(t *testing.T) {
 
 func TestGzipRoundTrip(t *testing.T) {
 	svc := &fakeServices{get: func(context.Context, int64) (*model.Balance, error) {
-		return &model.Balance{Current: 1, Withdrawn: 2}, nil
+		return &model.Balance{Current: 100, Withdrawn: 200}, nil
 	}}
 	svc.register = func(context.Context, string, string) (string, error) { return "tok", nil }
 	h := newRouter(svc)

@@ -45,7 +45,7 @@ func (s *Storage) GetBalance(ctx context.Context, userID int64) (*model.Balance,
 	return &balance, nil
 }
 
-func (s *Storage) Withdraw(ctx context.Context, userID int64, order string, sum float64) error {
+func (s *Storage) Withdraw(ctx context.Context, userID int64, order string, sum model.Money) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, queryDebitBalance, userID, sum)
 		if err != nil {

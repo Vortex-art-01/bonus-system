@@ -103,7 +103,7 @@ func (s *Storage) UpdateOrderStatus(ctx context.Context, number string, status m
 	return nil
 }
 
-func (s *Storage) ProcessOrder(ctx context.Context, number string, accrual float64) error {
+func (s *Storage) ProcessOrder(ctx context.Context, number string, accrual model.Money) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		var userID int64
 		err := tx.QueryRow(ctx, queryMarkOrderProcessed, number, accrual).Scan(&userID)

@@ -26,19 +26,19 @@ type Order struct {
 	Number     string
 	UserID     int64
 	Status     OrderStatus
-	Accrual    *float64
+	Accrual    *Money
 	UploadedAt time.Time
 }
 
 type Balance struct {
-	Current   float64
-	Withdrawn float64
+	Current   Money
+	Withdrawn Money
 }
 
 type Withdrawal struct {
 	ID          int64
 	UserID      int64
 	Order       string
-	Sum         float64
+	Sum         Money
 	ProcessedAt time.Time
 }

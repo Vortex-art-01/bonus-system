@@ -9,19 +9,19 @@ import (
 )
 
 type balanceResponse struct {
-	Current   float64 `json:"current"`
-	Withdrawn float64 `json:"withdrawn"`
+	Current   model.Money `json:"current"`
+	Withdrawn model.Money `json:"withdrawn"`
 }
 
 type withdrawRequest struct {
-	Order string  `json:"order"`
-	Sum   float64 `json:"sum"`
+	Order string      `json:"order"`
+	Sum   model.Money `json:"sum"`
 }
 
 type withdrawalResponse struct {
-	Order       string  `json:"order"`
-	Sum         float64 `json:"sum"`
-	ProcessedAt string  `json:"processed_at"`
+	Order       string      `json:"order"`
+	Sum         model.Money `json:"sum"`
+	ProcessedAt string      `json:"processed_at"`
 }
 
 func (h *Handler) getBalance(w http.ResponseWriter, r *http.Request) {
